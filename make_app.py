@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+content = """from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import numpy as np
@@ -53,3 +53,8 @@ def analyze_skin():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+"""
+
+with open('app.py', 'w') as f:
+    f.write(content)
+print('app.py created successfully!')
