@@ -3,7 +3,6 @@ flask-cors
 numpy
 scikit-learn
 joblib
-tensorflow==2.16.1
 pillow
 gunicorn
 pandas
