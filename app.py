@@ -19,6 +19,9 @@ def home():
 def predict():
     try:
         import joblib
+        import os
+        if not os.path.exists('disease_model.pkl'):
+            return jsonify({"error": "Model not found"}), 503
         disease_model = joblib.load('disease_model.pkl')
         severity_model = joblib.load('severity_model.pkl')
         severity_disease_encoder = joblib.load('severity_disease_encoder.pkl')
