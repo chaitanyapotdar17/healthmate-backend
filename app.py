@@ -10,6 +10,8 @@ with open('symptoms.json') as f:
     all_symptoms = json.load(f)
 with open('disease_classes.json') as f:
     disease_classes = json.load(f)
+with open('skin_classes.json') as f:
+    skin_classes = json.load(f)
 
 @app.route('/')
 def home():
@@ -48,11 +50,47 @@ def get_symptoms():
 
 @app.route('/analyze-xray', methods=['POST'])
 def analyze_xray():
-    return jsonify({"result": "Unavailable", "confidence": 0}), 503
+    try:
+        import tensorflow as tf
+        from PIL import Image
+        import io
+        import os
+        if not os.path.exists('xray_model_small.keras'):
+            return jsonify({"error": "Model not found"}), 503
+        xray_model = tf.keras.models.load_model('xray_model_small.keras')
+        file = request.files['image']
+        img = Image.open(io.BytesIO(file.read())).resize((64, 64)).convert('RGB')
+        img_array = np.array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+        prediction = xray_model.predict(img_array)[0][0]
+        result = "Pneumonia" if prediction > 0.5 else "Normal"
+        confidence = float(prediction) if prediction > 0.5 else float(1 - prediction)
+        return jsonify({"result": result, "confidence": round(confidence * 100, 2)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/analyze-skin', methods=['POST'])
 def analyze_skin():
-    return jsonify({"result": "Unavailable", "confidence": 0}), 503
+    try:
+        import tensorflow as tf
+        from PIL import Image
+        import io
+        import os
+        if not os.path.exists('skin_model_small.keras'):
+            return jsonify({"error": "Model not found"}), 503
+        skin_model = tf.keras.models.load_model('skin_model_small.keras')
+        class_names = {v: k for k, v in skin_classes.items()}
+        file = request.files['image']
+        img = Image.open(io.BytesIO(file.read())).resize((64, 64)).convert('RGB')
+        img_array = np.array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+        predictions = skin_model.predict(img_array)[0]
+        class_idx = np.argmax(predictions)
+        result = class_names[class_idx]
+        confidence = float(predictions[class_idx])
+        return jsonify({"result": result, "confidence": round(confidence * 100, 2)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
