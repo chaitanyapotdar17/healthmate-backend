@@ -3,17 +3,44 @@ from flask_cors import CORS
 import json
 import numpy as np
 import os
+import joblib
+import tensorflow as tf
+from PIL import Image
+import io
 
 app = Flask(__name__)
 CORS(app)
 
+# ── Load JSON data ──────────────────────────────────────────────
 with open('symptoms.json') as f:
     all_symptoms = json.load(f)
 with open('disease_classes.json') as f:
     disease_classes = json.load(f)
-with open('skin_classes_sklearn.json') as f:
+with open('skin_classes.json') as f:
     skin_classes = json.load(f)
 
+skin_class_names = {v: k for k, v in skin_classes.items()}
+
+# ── Load all models at startup ──────────────────────────────────
+print("Loading disease model...")
+disease_model = joblib.load('disease_model.pkl')
+print("Loading severity model...")
+severity_model = joblib.load('severity_model.pkl')
+severity_disease_encoder = joblib.load('severity_disease_encoder.pkl')
+severity_label_encoder = joblib.load('severity_label_encoder.pkl')
+print("Loading X-Ray model...")
+xray_model = tf.keras.models.load_model('xray_model_best.keras')
+print("Loading Skin model...")
+skin_model = tf.keras.models.load_model('skin_model_best.keras')
+print("✅ All models loaded successfully!")
+
+# ── Helper function ─────────────────────────────────────────────
+def preprocess_image(file, size):
+    img = Image.open(io.BytesIO(file.read())).resize(size).convert('RGB')
+    img_array = np.array(img) / 255.0
+    return np.expand_dims(img_array, axis=0)
+
+# ── Routes ──────────────────────────────────────────────────────
 @app.route('/')
 def home():
     return jsonify({"status": "HealthMate API is running"})
@@ -21,15 +48,12 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        import joblib
-        if not os.path.exists('disease_model.pkl'):
-            return jsonify({"error": "Model not found"}), 503
-        disease_model = joblib.load('disease_model.pkl')
-        severity_model = joblib.load('severity_model.pkl')
-        severity_disease_encoder = joblib.load('severity_disease_encoder.pkl')
-        severity_label_encoder = joblib.load('severity_label_encoder.pkl')
         data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
         symptoms = data.get('symptoms', [])
+        if not symptoms:
+            return jsonify({"error": "No symptoms provided"}), 400
         input_vector = [1 if s in symptoms else 0 for s in all_symptoms]
         input_array = np.array(input_vector).reshape(1, -1)
         prediction = disease_model.predict(input_array)[0]
@@ -40,7 +64,10 @@ def predict():
             severity = severity_label_encoder.inverse_transform([severity_pred])[0]
         except:
             severity = "Medium"
-        return jsonify({"disease": disease, "severity": severity})
+        return jsonify({
+            "disease": disease,
+            "severity": severity
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -51,42 +78,39 @@ def get_symptoms():
 @app.route('/analyze-xray', methods=['POST'])
 def analyze_xray():
     try:
-        import joblib
-        from PIL import Image
-        import io
-        if not os.path.exists('xray_model_sklearn.pkl'):
-            return jsonify({"error": "Model not found"}), 503
-        xray_model = joblib.load('xray_model_sklearn.pkl')
+        if 'image' not in request.files:
+            return jsonify({"error": "No image provided"}), 400
         file = request.files['image']
-        img = Image.open(io.BytesIO(file.read())).resize((32, 32)).convert('RGB')
-        img_array = np.array(img).flatten() / 255.0
-        img_array = img_array.reshape(1, -1)
-        prediction = xray_model.predict(img_array)[0]
-        probability = xray_model.predict_proba(img_array)[0]
-        result = "Pneumonia" if prediction == 1 else "Normal"
-        confidence = float(max(probability)) * 100
-        return jsonify({"result": result, "confidence": round(confidence, 2)})
+        if file.filename == '':
+            return jsonify({"error": "Empty filename"}), 400
+        img_array = preprocess_image(file, (224, 224))
+        prediction = xray_model.predict(img_array)[0][0]
+        result = "Pneumonia" if prediction > 0.5 else "Normal"
+        confidence = float(prediction) if prediction > 0.5 else float(1 - prediction)
+        return jsonify({
+            "result": result,
+            "confidence": round(confidence * 100, 2)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/analyze-skin', methods=['POST'])
 def analyze_skin():
     try:
-        import joblib
-        from PIL import Image
-        import io
-        if not os.path.exists('skin_model_sklearn.pkl'):
-            return jsonify({"error": "Model not found"}), 503
-        skin_model = joblib.load('skin_model_sklearn.pkl')
+        if 'image' not in request.files:
+            return jsonify({"error": "No image provided"}), 400
         file = request.files['image']
-        img = Image.open(io.BytesIO(file.read())).resize((32, 32)).convert('RGB')
-        img_array = np.array(img).flatten() / 255.0
-        img_array = img_array.reshape(1, -1)
-        prediction = skin_model.predict(img_array)[0]
-        probability = skin_model.predict_proba(img_array)[0]
-        result = skin_classes[prediction]
-        confidence = float(max(probability)) * 100
-        return jsonify({"result": result, "confidence": round(confidence, 2)})
+        if file.filename == '':
+            return jsonify({"error": "Empty filename"}), 400
+        img_array = preprocess_image(file, (224, 224))
+        predictions = skin_model.predict(img_array)[0]
+        class_idx = int(np.argmax(predictions))
+        result = skin_class_names[class_idx]
+        confidence = float(predictions[class_idx])
+        return jsonify({
+            "result": result,
+            "confidence": round(confidence * 100, 2)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
