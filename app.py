@@ -11,7 +11,7 @@ with open('symptoms.json') as f:
     all_symptoms = json.load(f)
 with open('disease_classes.json') as f:
     disease_classes = json.load(f)
-with open('skin_classes.json') as f:
+with open('skin_classes_sklearn.json') as f:
     skin_classes = json.load(f)
 
 @app.route('/')
@@ -51,48 +51,42 @@ def get_symptoms():
 @app.route('/analyze-xray', methods=['POST'])
 def analyze_xray():
     try:
-        import tensorflow as tf
+        import joblib
         from PIL import Image
         import io
-        if not os.path.exists('xray_model_small.keras'):
+        if not os.path.exists('xray_model_sklearn.pkl'):
             return jsonify({"error": "Model not found"}), 503
-        xray_model = tf.keras.models.load_model('xray_model_small.keras')
+        xray_model = joblib.load('xray_model_sklearn.pkl')
         file = request.files['image']
-        img = Image.open(io.BytesIO(file.read())).resize((64, 64)).convert('RGB')
-        img_array = np.array(img) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
-        prediction = xray_model.predict(img_array)[0][0]
-        result = "Pneumonia" if prediction > 0.5 else "Normal"
-        confidence = float(prediction) if prediction > 0.5 else float(1 - prediction)
-        return jsonify({
-            "result": result,
-            "confidence": round(confidence * 100, 2)
-        })
+        img = Image.open(io.BytesIO(file.read())).resize((32, 32)).convert('RGB')
+        img_array = np.array(img).flatten() / 255.0
+        img_array = img_array.reshape(1, -1)
+        prediction = xray_model.predict(img_array)[0]
+        probability = xray_model.predict_proba(img_array)[0]
+        result = "Pneumonia" if prediction == 1 else "Normal"
+        confidence = float(max(probability)) * 100
+        return jsonify({"result": result, "confidence": round(confidence, 2)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/analyze-skin', methods=['POST'])
 def analyze_skin():
     try:
-        import tensorflow as tf
+        import joblib
         from PIL import Image
         import io
-        if not os.path.exists('skin_model_small.keras'):
+        if not os.path.exists('skin_model_sklearn.pkl'):
             return jsonify({"error": "Model not found"}), 503
-        skin_model = tf.keras.models.load_model('skin_model_small.keras')
-        class_names = {v: k for k, v in skin_classes.items()}
+        skin_model = joblib.load('skin_model_sklearn.pkl')
         file = request.files['image']
-        img = Image.open(io.BytesIO(file.read())).resize((64, 64)).convert('RGB')
-        img_array = np.array(img) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
-        predictions = skin_model.predict(img_array)[0]
-        class_idx = int(np.argmax(predictions))
-        result = class_names[class_idx]
-        confidence = float(predictions[class_idx])
-        return jsonify({
-            "result": result,
-            "confidence": round(confidence * 100, 2)
-        })
+        img = Image.open(io.BytesIO(file.read())).resize((32, 32)).convert('RGB')
+        img_array = np.array(img).flatten() / 255.0
+        img_array = img_array.reshape(1, -1)
+        prediction = skin_model.predict(img_array)[0]
+        probability = skin_model.predict_proba(img_array)[0]
+        result = skin_classes[prediction]
+        confidence = float(max(probability)) * 100
+        return jsonify({"result": result, "confidence": round(confidence, 2)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
