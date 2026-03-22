@@ -29,9 +29,9 @@ severity_model = joblib.load('severity_model.pkl')
 severity_disease_encoder = joblib.load('severity_disease_encoder.pkl')
 severity_label_encoder = joblib.load('severity_label_encoder.pkl')
 print("Loading X-Ray model...")
-xray_model = tf.keras.models.load_model('xray_model_best.keras')
+xray_model = tf.keras.models.load_model('xray_model_best.h5')
 print("Loading Skin model...")
-skin_model = tf.keras.models.load_model('skin_model_best.keras')
+skin_model = tf.keras.models.load_model('skin_model_best.h5')
 print("All models loaded!")
 
 # Helper function
