@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import numpy as np
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -21,7 +22,6 @@ def home():
 def predict():
     try:
         import joblib
-        import os
         if not os.path.exists('disease_model.pkl'):
             return jsonify({"error": "Model not found"}), 503
         disease_model = joblib.load('disease_model.pkl')
@@ -54,7 +54,6 @@ def analyze_xray():
         import tensorflow as tf
         from PIL import Image
         import io
-        import os
         if not os.path.exists('xray_model_small.keras'):
             return jsonify({"error": "Model not found"}), 503
         xray_model = tf.keras.models.load_model('xray_model_small.keras')
@@ -65,7 +64,10 @@ def analyze_xray():
         prediction = xray_model.predict(img_array)[0][0]
         result = "Pneumonia" if prediction > 0.5 else "Normal"
         confidence = float(prediction) if prediction > 0.5 else float(1 - prediction)
-        return jsonify({"result": result, "confidence": round(confidence * 100, 2)})
+        return jsonify({
+            "result": result,
+            "confidence": round(confidence * 100, 2)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -75,7 +77,6 @@ def analyze_skin():
         import tensorflow as tf
         from PIL import Image
         import io
-        import os
         if not os.path.exists('skin_model_small.keras'):
             return jsonify({"error": "Model not found"}), 503
         skin_model = tf.keras.models.load_model('skin_model_small.keras')
@@ -85,10 +86,13 @@ def analyze_skin():
         img_array = np.array(img) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
         predictions = skin_model.predict(img_array)[0]
-        class_idx = np.argmax(predictions)
+        class_idx = int(np.argmax(predictions))
         result = class_names[class_idx]
         confidence = float(predictions[class_idx])
-        return jsonify({"result": result, "confidence": round(confidence * 100, 2)})
+        return jsonify({
+            "result": result,
+            "confidence": round(confidence * 100, 2)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

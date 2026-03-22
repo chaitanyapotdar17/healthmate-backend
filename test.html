@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HealthMate API Test</title>
+</head>
+<body>
+    <h1>HealthMate Symptom Test</h1>
+    <input type="text" id="symptom" placeholder="Type symptom e.g. fever">
+    <button onclick="addSymptom()">Add Symptom</button>
+    <p>Added symptoms: <span id="list">none</span></p>
+    <button onclick="predict()">Predict Disease</button>
+    <h2 id="result"></h2>
+
+    <script>
+        var symptoms = [];
+        function addSymptom() {
+            var s = document.getElementById('symptom').value;
+            symptoms.push(s);
+            document.getElementById('list').innerText = symptoms.join(', ');
+        }
+        function predict() {
+            fetch('https://healthmate-backend-dp3g.onrender.com/predict', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({symptoms: symptoms})
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('result').innerText = 
+                    'Disease: ' + data.disease + ' | Severity: ' + data.severity;
+            });
+        }
+    </script>
+</body>
+</html>
