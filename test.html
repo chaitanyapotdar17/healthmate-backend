@@ -1,42 +1,75 @@
-import numpy as np
-from PIL import Image
-import os
-import joblib
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HealthMate API Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        button { background: #2196F3; color: white; padding: 10px 20px; border: none; cursor: pointer; margin: 5px; }
+        #result { margin-top: 20px; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>HealthMate Image Analysis Test</h1>
+    
+    <h2>Test X-Ray Analysis</h2>
+    <input type="file" id="xrayFile" accept="image/*">
+    <button onclick="analyzeXray()">Analyze X-Ray</button>
+    
+    <h2>Test Skin Analysis</h2>
+    <input type="file" id="skinFile" accept="image/*">
+    <button onclick="analyzeSkin()">Analyze Skin</button>
+    
+    <h2>Result:</h2>
+    <div id="result">No result yet</div>
 
-def load_images(folder, label, size=(32,32)):
-    images = []
-    labels = []
-    for filename in os.listdir(folder):
-        if filename.lower().endswith(('.jpeg','.jpg','.png')):
-            try:
-                img = Image.open(os.path.join(folder, filename)).resize(size).convert('RGB')
-                images.append(np.array(img).flatten() / 255.0)
-                labels.append(label)
-            except:
-                pass
-    return images, labels
+    <script>
+        const BASE_URL = 'https://healthmate-backend-dp3g.onrender.com';
 
-print("Loading Normal images...")
-normal_imgs, normal_labels = load_images('xray_data/train/NORMAL', 0)
-print(f"Loaded {len(normal_imgs)} normal images")
+        function analyzeXray() {
+            const file = document.getElementById('xrayFile').files[0];
+            if (!file) { alert('Please select an image first!'); return; }
+            
+            document.getElementById('result').innerText = 'Analyzing...';
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            fetch(BASE_URL + '/analyze-xray', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('result').innerText = 
+                    'Result: ' + JSON.stringify(data);
+            })
+            .catch(err => {
+                document.getElementById('result').innerText = 'Error: ' + err;
+            });
+        }
 
-print("Loading Pneumonia images...")
-pneumonia_imgs, pneumonia_labels = load_images('xray_data/train/PNEUMONIA', 1)
-print(f"Loaded {len(pneumonia_imgs)} pneumonia images")
-
-X = np.array(normal_imgs + pneumonia_imgs)
-y = np.array(normal_labels + pneumonia_labels)
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-print("Training model...")
-model = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
-model.fit(X_train, y_train)
-
-accuracy = model.score(X_test, y_test)
-print(f"Accuracy: {accuracy * 100:.2f}%")
-
-joblib.dump(model, 'xray_model_sklearn.pkl')
-print("xray_model_sklearn.pkl saved!")
+        function analyzeSkin() {
+            const file = document.getElementById('skinFile').files[0];
+            if (!file) { alert('Please select an image first!'); return; }
+            
+            document.getElementById('result').innerText = 'Analyzing...';
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            fetch(BASE_URL + '/analyze-skin', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('result').innerText = 
+                    'Result: ' + JSON.stringify(data);
+            })
+            .catch(err => {
+                document.getElementById('result').innerText = 'Error: ' + err;
+            });
+        }
+    </script>
+</body>
+</html>
