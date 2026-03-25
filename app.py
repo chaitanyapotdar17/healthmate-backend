@@ -74,6 +74,50 @@ SYMPTOM_MAPPING = {
 }
 
 # ──────────────────────────────────────────────────────────────
+# Lazy Loading - Models load only when needed
+# ──────────────────────────────────────────────────────────────
+disease_model = None
+severity_model = None
+severity_disease_encoder = None
+severity_label_encoder = None
+xray_model = None
+skin_model = None
+
+def get_disease_model():
+    global disease_model
+    if disease_model is None:
+        print("Loading disease model...")
+        disease_model = joblib.load('disease_model.pkl')
+        print("✅ Disease model loaded")
+    return disease_model
+
+def get_severity_models():
+    global severity_model, severity_disease_encoder, severity_label_encoder
+    if severity_model is None:
+        print("Loading severity models...")
+        severity_model = joblib.load('severity_model.pkl')
+        severity_disease_encoder = joblib.load('severity_disease_encoder.pkl')
+        severity_label_encoder = joblib.load('severity_label_encoder.pkl')
+        print("✅ Severity models loaded")
+    return severity_model, severity_disease_encoder, severity_label_encoder
+
+def get_xray_model():
+    global xray_model
+    if xray_model is None:
+        print("Loading X-Ray model...")
+        xray_model = tf.keras.models.load_model('xray_model_small.keras')
+        print("✅ X-Ray model loaded")
+    return xray_model
+
+def get_skin_model():
+    global skin_model
+    if skin_model is None:
+        print("Loading Skin model...")
+        skin_model = tf.keras.models.load_model('skin_model_small.keras')
+        print("✅ Skin model loaded")
+    return skin_model
+
+# ──────────────────────────────────────────────────────────────
 # Load Medicine Database
 # ──────────────────────────────────────────────────────────────
 try:
@@ -83,31 +127,6 @@ try:
 except Exception as e:
     print(f"⚠️ Medicine database error: {e}")
     MEDICINES_AVAILABLE = False
-
-# ──────────────────────────────────────────────────────────────
-# Load ML Models at Startup
-# ──────────────────────────────────────────────────────────────
-print("Loading ML models...")
-
-# Load disease model
-disease_model = joblib.load('disease_model.pkl')
-print("✅ Disease model loaded")
-
-# Load severity models
-severity_model = joblib.load('severity_model.pkl')
-severity_disease_encoder = joblib.load('severity_disease_encoder.pkl')
-severity_label_encoder = joblib.load('severity_label_encoder.pkl')
-print("✅ Severity models loaded")
-
-# Load X-Ray model
-xray_model = tf.keras.models.load_model('xray_model_best.h5')
-print("✅ X-Ray model loaded")
-
-# Load Skin model
-skin_model = tf.keras.models.load_model('skin_model_best.h5')
-print("✅ Skin model loaded")
-
-print("🎉 All models loaded successfully!")
 
 # ──────────────────────────────────────────────────────────────
 # Helper Functions
@@ -172,6 +191,10 @@ def predict():
         if not symptoms:
             return jsonify({"error": "No symptoms provided"}), 400
         
+        # Load models only when needed
+        disease_model = get_disease_model()
+        severity_model, severity_disease_encoder, severity_label_encoder = get_severity_models()
+        
         # Convert symptoms to API format
         converted_symptoms = convert_symptoms(symptoms)
         
@@ -212,7 +235,8 @@ def analyze_xray():
         if file.filename == '':
             return jsonify({"error": "Empty filename"}), 400
         
-        img_array = preprocess_image(file, (224, 224))
+        xray_model = get_xray_model()
+        img_array = preprocess_image(file, (64, 64))
         prediction = xray_model.predict(img_array)[0][0]
         result = "Pneumonia" if prediction > 0.5 else "Normal"
         confidence = float(prediction) if prediction > 0.5 else float(1 - prediction)
@@ -238,7 +262,8 @@ def analyze_skin():
         if file.filename == '':
             return jsonify({"error": "Empty filename"}), 400
         
-        img_array = preprocess_image(file, (224, 224))
+        skin_model = get_skin_model()
+        img_array = preprocess_image(file, (64, 64))
         predictions = skin_model.predict(img_array)[0]
         class_idx = int(np.argmax(predictions))
         result = skin_class_names[class_idx]
